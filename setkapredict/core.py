@@ -6,7 +6,6 @@ import json, math, joblib
 import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 from sklearn.pipeline import make_pipeline
@@ -102,8 +101,10 @@ class SetkaPredictor:
         X,d,st,h2h=build_features(df,True); n=len(d)
         if n<300: raise ValueError("At least 300 completed matches are required; 2,000+ is recommended")
         i,j=int(n*.65),int(n*.82); tr,cal,te=slice(0,i),slice(i,j),slice(j,n)
-        self.models=[make_pipeline(StandardScaler(),LogisticRegression(C=.5,max_iter=2000,random_state=self.seed)),
-                     HistGradientBoostingClassifier(max_iter=180,max_leaf_nodes=15,l2_regularization=3,learning_rate=.055,random_state=self.seed)]
+        # Two regularized statistical models avoid version-fragile compiled
+        # gradient-boosting internals when the artifact is loaded in the cloud.
+        self.models=[make_pipeline(StandardScaler(),LogisticRegression(C=.35,max_iter=2000,random_state=self.seed)),
+                     make_pipeline(StandardScaler(),LogisticRegression(C=2.0,max_iter=2000,random_state=self.seed))]
         for m in self.models:m.fit(X.iloc[tr],d.y.iloc[tr])
         pc=[m.predict_proba(X.iloc[cal])[:,1] for m in self.models]
         candidates=np.linspace(0,1,11); losses=[log_loss(d.y.iloc[cal],w*pc[0]+(1-w)*pc[1]) for w in candidates]

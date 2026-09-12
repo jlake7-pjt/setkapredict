@@ -8,7 +8,7 @@ st.set_page_config(page_title="SetkaPredict 2026", page_icon="🏓")
 
 @st.cache_resource(show_spinner="Loading the calibrated 2026 model…")
 def load_model():
-    parts = sorted((Path(__file__).parent / "model_parts").glob("model.b64.part*"))
+    parts = sorted((Path(__file__).parent / "model_v2_parts").glob("model.b64.part*"))
     if not parts: raise FileNotFoundError("Model files are missing")
     encoded = "".join(p.read_text(encoding="ascii") for p in parts)
     target = Path(tempfile.gettempdir()) / "setkapredict_2026.joblib"

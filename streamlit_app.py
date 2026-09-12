@@ -1,23 +1,40 @@
-from pathlib import Path
-import tempfile
 import streamlit as st
 from setkapredict import SetkaPredictor
-from setkapredict.synthetic import generate
+from setkapredict.real_data import load_public_archive
 
 st.set_page_config(page_title="SetkaPredict", page_icon="🏓")
 
-@st.cache_resource(show_spinner="Initializing demonstration model…")
+@st.cache_resource(show_spinner="Downloading, validating, training, and calibrating real Setka history…")
 def load_model():
-    demo_path = Path(tempfile.gettempdir()) / "setkapredict_demo.csv"
-    history = generate(demo_path, n_matches=2500, n_players=48, seed=5212)
-    return SetkaPredictor(seed=5212).fit(history)
+    history, audit = load_public_archive()
+    model = SetkaPredictor(seed=5212).fit(history)
+    return model, audit
 
-model = load_model()
+try:
+    model, audit = load_model()
+except Exception as exc:
+    st.error("The historical-data source could not be loaded. Please retry shortly.")
+    st.exception(exc)
+    st.stop()
 names = sorted(model.names.values())
 
 st.title("🏓 SetkaPredict")
 st.caption("Calibrated table-tennis match probabilities with an evidence-based abstention option")
-st.warning("DEMONSTRATION MODE: The players and results are synthetic. This page proves the hosted application works, but it must be trained on genuine Setka history before it can predict real players.")
+st.warning("HISTORICAL PROTOTYPE: This model uses 7,846 genuine Setka matches from June 10–July 8, 2022. The names are abbreviated and the archive has no official player IDs. Do not treat it as a current 2026 forecast until recent history is added.")
+
+with st.expander("Verified historical-data and holdout results"):
+    test = model.report["test"]
+    st.write(f"Clean matches: **{audit['clean_rows']:,}** · Players: **{audit['players']:,}** · Untouched test matches: **{test['n']:,}**")
+    m1,m2,m3,m4 = st.columns(4)
+    m1.metric("Overall accuracy", f"{test['accuracy']:.1%}")
+    m2.metric("Brier score", f"{test['brier']:.3f}")
+    m3.metric("ROC-AUC", f"{test['roc_auc']:.3f}")
+    m4.metric("Calibration error", f"{test['ece_10']:.1%}")
+    st.write("At ≥70% model confidence: "
+             f"**{test['selective']['0.7']['accuracy']:.1%} accuracy** on "
+             f"{test['selective']['0.7']['n']} test matches "
+             f"({test['selective']['0.7']['coverage']:.1%} coverage).")
+    st.caption("Source audit: 4 duplicates and 1 invalid self-match removed; all retained point-level scores agree with set totals.")
 
 left, right = st.columns(2)
 with left:
@@ -43,5 +60,4 @@ if st.button("Predict winner", type="primary", use_container_width=True):
             st.json({"history": result["history"], "checks": result["checks"]})
 
 st.divider()
-st.caption("Probabilities are estimates, not guarantees. Synthetic validation scores do not measure real Setka performance.")
-
+st.caption("Probabilities are estimates, not guarantees. Historical holdout performance does not guarantee current or future results.")
